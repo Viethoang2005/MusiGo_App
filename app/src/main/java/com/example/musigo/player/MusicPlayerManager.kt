@@ -8,6 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.compose.material3.Player
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,6 +48,14 @@ class MusicPlayerManager @Inject constructor(
             })
         }
 
+    var onSongEnded: (() -> Unit)? = null
+    init {
+        player.addListener(object: Player.Listener{
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if(playbackState == Player.STATE_ENDED) onSongEnded?.invoke()
+            }
+        })
+    }
     val isPlaying : Boolean
         get() = player.isPlaying
 

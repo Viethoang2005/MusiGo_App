@@ -16,10 +16,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,24 +48,54 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.musigo.R
 import com.example.musigo.data.model.Song
 import com.example.musigo.data.model.SongUiModel
+import com.example.musigo.ui.song.RepeatMode
 import com.example.musigo.ui.song.SongViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     song: SongUiModel?,
     songViewModel: SongViewModel,
     onBackClick: () -> Unit
 ) {
-    val currentPosition by songViewModel.currentPosition.collectAsState()
-    val songDuration by songViewModel.duration.collectAsState()
-    val isPlaying by songViewModel.isPlaying.collectAsState()
-
+    val playerState by songViewModel.playerState.collectAsState()
+    PlayerScreenContent(
+        song = song,
+        isPlaying = playerState.isPlaying,
+        currentPosition = playerState.currentPosition,
+        songDuration = playerState.duration,
+        repeatMode = playerState.repeatMode,
+        onSeek = { newValue ->
+            val targetPosition  = (newValue * playerState.duration).toLong()
+            songViewModel.seekTo(targetPosition)
+        },
+        formatDuration = { ms -> songViewModel.formatDuration(ms)},
+        onPlayPauseClick =  { songViewModel.togglePlayPause() },
+        onPreviousClick = { songViewModel.playPrevious() },
+        onNextClick = { songViewModel.playNext() },
+        toggleRepeat = { songViewModel.toggleRepeatMode() },
+        onBackClick = onBackClick
+    )
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayerScreenContent(
+    song: SongUiModel?,
+    isPlaying: Boolean,
+    currentPosition: Long,
+    songDuration: Long,
+    repeatMode: RepeatMode,
+    onSeek: (Float) -> Unit,
+    formatDuration: (Long) -> String,
+    onPlayPauseClick: () -> Unit,
+    onPreviousClick: () -> Unit,
+    onNextClick: () -> Unit,
+    toggleRepeat: () -> Unit,
+    onBackClick: () -> Unit
+) {
     val slidePosition = if(songDuration > 0) {
         currentPosition.toFloat() / songDuration.toFloat()
     } else 0f
@@ -144,14 +175,13 @@ fun PlayerScreen(
 
                 Spacer(Modifier.height(40.dp))
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
                 ) {
                     Slider(
                         value = slidePosition,
-                        onValueChange = {newValue ->
-                            val targetPosition  = (newValue * songDuration).toLong()
-                            songViewModel.seekTo(targetPosition)
-                        },
+                        onValueChange = onSeek,
                         colors = SliderDefaults.colors(
                             thumbColor = colorResource(R.color.textPrimary),
                             activeTrackColor = colorResource(R.color.textPrimary),
@@ -164,7 +194,7 @@ fun PlayerScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(3.dp) // Độ dày của thanh slider (bạn có thể chỉnh 2.dp hoặc 4.dp tùy ý)
+                                    .height(3.dp)
                                     .clip(RoundedCornerShape(1.5.dp))
                                     .background(Color.Gray.copy(alpha = 0.3f))
                             ) {
@@ -193,12 +223,12 @@ fun PlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = songViewModel.formatDuration(currentPosition),
+                            text = formatDuration(currentPosition),
                             fontSize = 13.sp,
                             color = colorResource(R.color.textSecondary)
                         )
                         Text(
-                            text = songViewModel.formatDuration(songDuration),
+                            text = formatDuration(songDuration),
                             fontSize = 13.sp,
                             color = colorResource(R.color.textSecondary)
                         )
@@ -218,12 +248,12 @@ fun PlayerScreen(
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Shuffle"
+                            imageVector = Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite"
                         )
                     }
                     IconButton(
-                        onClick = {},
+                        onClick = onPreviousClick,
                         colors = IconButtonDefaults.iconButtonColors(
                             contentColor = colorResource(R.color.textPrimary)
                         )
@@ -234,7 +264,7 @@ fun PlayerScreen(
                         )
                     }
                     FloatingActionButton(
-                        onClick = { songViewModel.togglePlayPause() },
+                        onClick = onPlayPauseClick,
                         containerColor = colorResource(R.color.textPrimary),
                         contentColor = colorResource(R.color.primaryDark),
                         shape = RoundedCornerShape(10.dp)
@@ -246,7 +276,7 @@ fun PlayerScreen(
                         )
                     }
                     IconButton(
-                        onClick = {},
+                        onClick = onNextClick,
                         colors = IconButtonDefaults.iconButtonColors(
                             contentColor = colorResource(R.color.textPrimary)
                         )
@@ -257,14 +287,20 @@ fun PlayerScreen(
                         )
                     }
                     IconButton(
-                        onClick = {},
+                        onClick = toggleRepeat,
                         colors = IconButtonDefaults.iconButtonColors(
                             contentColor = colorResource(R.color.textPrimary)
                         )
                     ) {
+                        val (icon, tint) = when(repeatMode) {
+                            RepeatMode.ONE -> Icons.Default.RepeatOne to colorResource(R.color.textPrimary)
+                            RepeatMode.ALL -> Icons.Default.Repeat to colorResource(R.color.textPrimary)
+                            RepeatMode.OFF -> Icons.Default.Repeat to colorResource(R.color.textSecondary)
+                        }
                         Icon(
-                            imageVector = Icons.Default.Repeat,
-                            contentDescription = "Repeat"
+                            imageVector = icon,
+                            contentDescription = "Repeat",
+                            tint = tint
                         )
                     }
                 }
@@ -278,5 +314,18 @@ fun PlayerScreen(
 fun PLayerScreenPreview() {
     val song = Song("1", "Te that, anh nho em", "Thanh Hung", "", "",225, "")
     val songModel = SongUiModel(song, "Thanh Hưng")
-    PlayerScreen(songModel, songViewModel = hiltViewModel(), onBackClick = {})
+    PlayerScreenContent(
+        songModel,
+        false,
+        45000L,
+        songDuration = 225000L,
+        repeatMode = RepeatMode.OFF,
+        onSeek = {},
+        formatDuration = {"1:15"},
+        onPlayPauseClick = {},
+        onNextClick = {},
+        onPreviousClick = {},
+        toggleRepeat = {},
+        onBackClick = {}
+    )
 }

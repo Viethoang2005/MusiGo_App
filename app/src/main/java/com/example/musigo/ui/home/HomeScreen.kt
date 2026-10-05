@@ -1,20 +1,26 @@
 package com.example.musigo.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,7 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,7 +39,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.musigo.R
 import com.example.musigo.component.ArtistItem
 import com.example.musigo.component.SongItem
-import com.example.musigo.component.TopBar
 import com.example.musigo.theme.MusiGoTheme
 import com.example.musigo.ui.song.SongViewModel
 
@@ -54,14 +61,43 @@ fun HomeScreenContent(
     val isLoading by homeViewModel.isLoading.collectAsState()
     val error by homeViewModel.error.collectAsState()
 
-    val currentPlayingId by songViewModel.currentPlayingSongId.collectAsState()
+    val playerState by songViewModel.playerState.collectAsState()
+    val currentSongId = playerState.currentSongId
 
     LaunchedEffect(Unit) {
         homeViewModel.loadSongs()
         homeViewModel.loadArtists()
     }
     Scaffold(
-        topBar = { TopBar() }
+        topBar = { TopAppBar(
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            title = {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "MusiGo",
+                        fontSize = 24.sp,
+                        textAlign = TextAlign.Center,
+                        color = colorResource(R.color.textPrimary)
+                    )
+                }
+            },
+            navigationIcon = {
+                Image(
+                    painter = painterResource(R.drawable.icon_music_app),
+                    contentDescription = null,
+                    modifier = Modifier.padding(start = 12.dp).size(36.dp)
+                )
+            },
+            actions =  {
+                Box(Modifier.size(48.dp))
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = colorResource(R.color.primaryDark)
+            )
+        ) }
     ) { innerPadding ->
         if(isLoading) {
             Box(
@@ -100,13 +136,13 @@ fun HomeScreenContent(
                             )
                             Spacer(Modifier.height(12.dp))
                             LazyRow {
-                                items(songs) { song ->
-                                    val isSelected = currentPlayingId == song.song.id
+                                itemsIndexed(songs) { index, song ->
+                                    val isSelected = currentSongId == song.song.id
                                     SongItem(
                                         song = song,
                                         isSelected,
                                         onPlay = {
-                                            songViewModel.playSong(song)
+                                            songViewModel.setPlaylist(songs, index)
                                         }
                                     )
                                 }
@@ -132,13 +168,13 @@ fun HomeScreenContent(
                             )
                             Spacer(Modifier.height(12.dp))
                             LazyRow {
-                                items(songs) { song ->
-                                    val isSelected = currentPlayingId == song.song.id
+                                itemsIndexed(songs) {index, song ->
+                                    val isSelected = currentSongId == song.song.id
                                     SongItem(
                                         song = song,
                                         isSelected,
                                         onPlay = {
-                                            songViewModel.playSong(song)
+                                            songViewModel.setPlaylist(songs, index)
                                         }
                                     )
                                 }

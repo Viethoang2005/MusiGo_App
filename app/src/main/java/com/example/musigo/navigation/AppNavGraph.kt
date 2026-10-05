@@ -27,8 +27,11 @@ fun AppNavGraph() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     val songViewModel: SongViewModel = hiltViewModel()
-    val currentSong by songViewModel.currentPlayingSong.collectAsState()
-    val isPlaying by songViewModel.isPlaying.collectAsState()
+
+    val playerState by songViewModel.playerState.collectAsState()
+    val currentSong = playerState.currentSong
+    val isPlaying = playerState.isPlaying
+
     val bottomNavRoutes = listOf(
         BottomNavItem.Home.route,
         BottomNavItem.Search.route,
@@ -47,7 +50,7 @@ fun AppNavGraph() {
                         onNavigateToPlayerScreen = {
                             navController.navigate(Routes.Player)
                         },
-                        onNext = {},
+                        onNext = { songViewModel.playNext() },
                         onPlayPauseClick = {
                             songViewModel.togglePlayPause()
                         }

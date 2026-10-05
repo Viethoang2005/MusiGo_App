@@ -3,73 +3,121 @@ package com.example.musigo.ui.song
 import android.annotation.SuppressLint
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musigo.data.model.Artist
 import com.example.musigo.data.model.SongUiModel
-import com.example.musigo.data.repository.SongRepository
 import com.example.musigo.player.MusicPlayerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
+enum class RepeatMode {
+    OFF, ONE, ALL
+}
+data class PlayerState(
+    val currentSong: SongUiModel? = null,
+    val isPlaying: Boolean = false,
+    var currentPosition: Long = 0L,
+    val duration: Long = 0L,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val currentSongId: String? = null,
+    val playlist: List<SongUiModel> = emptyList(),
+    val currentIndex: Int = -1,
+    val repeatMode: RepeatMode = RepeatMode.OFF
+)
 @HiltViewModel
 class SongViewModel @Inject constructor(
     private val musicPlayerManager: MusicPlayerManager
 ): ViewModel() {
 
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-    private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    private val _playerState = MutableStateFlow(PlayerState())
+    val playerState = _playerState.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
-    private val _currentPlayingSongId = MutableStateFlow<String?>(null)
-    val currentPlayingSongId: StateFlow<String?> = _currentPlayingSongId.asStateFlow()
-
-    private val _currentPlayingSong = MutableStateFlow<SongUiModel?>(null)
-    val currentPlayingSong: StateFlow<SongUiModel?> = _currentPlayingSong.asStateFlow()
-
-    private val _currentPositon = MutableStateFlow(0L)
-    val currentPosition: StateFlow<Long> = _currentPositon.asStateFlow()
-
-    private val _duration = MutableStateFlow(0L)
-    val duration: StateFlow<Long> = _duration.asStateFlow()
     init {
+        musicPlayerManager.onSongEnded = {
+            playNext()
+        }
         viewModelScope.launch {
             while (true) {
-                if(_currentPlayingSong.value != null) {
-                    _currentPositon.value = musicPlayerManager.currentPosition
-                    _duration.value = musicPlayerManager.duration.coerceAtLeast(0L)
-
-                    _isPlaying.value = musicPlayerManager.isPlaying
+                if(_playerState.value.currentSong != null) {
+                    _playerState.value = _playerState.value.copy(
+                        currentPosition = musicPlayerManager.currentPosition,
+                        duration = musicPlayerManager.duration.coerceAtLeast(0L),
+                        isPlaying = musicPlayerManager.isPlaying
+                    )
                 }
                 delay(500L.milliseconds)
             }
         }
     }
 
+    fun setPlaylist(songs: List<SongUiModel>, initialIndex: Int) {
+        if(songs.isEmpty()) return
+        val safeIndex = initialIndex.coerceIn(0, songs.size - 1)
+        _playerState.value = _playerState.value.copy(
+            playlist = songs,
+            currentIndex = safeIndex
+        )
+        playSong(songs[safeIndex])
+    }
+
     fun seekTo(position: Long) {
         musicPlayerManager.seekTo(position)
-        _currentPositon.value = position
+        _playerState.value.currentPosition = position
     }
 
     fun playSong(song: SongUiModel) {
-        _currentPlayingSongId.value = song.song.id
-        _currentPlayingSong.value = song
+        val currentList = _playerState.value.playlist
+        val index = currentList.indexOfFirst { it.song.id == song.song.id }
+
         musicPlayerManager.play(song.song.audioUrl)
-        _isPlaying.value = true
-        _duration.value = musicPlayerManager.duration.coerceAtLeast(0L)
+        _playerState.value = _playerState.value.copy(
+            currentSong = song,
+            currentSongId = song.song.id,
+            isPlaying = true,
+            duration = musicPlayerManager.duration.coerceAtLeast(0L),
+            currentIndex = if(index != -1) index else _playerState.value.currentIndex
+        )
     }
 
     fun togglePlayPause() {
         musicPlayerManager.togglePlayPause()
-        _isPlaying.value = musicPlayerManager.isPlaying
+        _playerState.value = _playerState.value.copy(
+            isPlaying = musicPlayerManager.isPlaying
+        )
+    }
+
+    fun toggleRepeatMode() {
+        val currentMode = _playerState.value.repeatMode
+        val newMode = when(currentMode) {
+            RepeatMode.OFF -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+        }
+        _playerState.value = _playerState.value.copy(repeatMode = newMode )
+    }
+    fun playNext() {
+        val state = _playerState.value
+        if(state.playlist.isEmpty()) return
+
+        if(state.repeatMode == RepeatMode.ONE && state.currentSong != null) {
+            playSong(state.currentSong)
+            return
+        }
+        val nextIndex = (state.currentIndex + 1) % state.playlist.size
+        if(nextIndex == 0 && state.repeatMode == RepeatMode.OFF) return
+        setPlaylist(state.playlist, nextIndex)
+    }
+
+    fun playPrevious() {
+        val state = _playerState.value
+        if(state.playlist.isEmpty()) return
+
+        val prevIndex = if(state.currentIndex - 1 < 0) state.playlist.size - 1 else state.currentIndex - 1
+        setPlaylist(state.playlist, prevIndex)
     }
 
     @SuppressLint("DefaultLocale")
